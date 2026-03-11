@@ -4,7 +4,7 @@
 
 A production-grade job queue implemented entirely on Solana. No Redis. No servers. Just math.
 
-[![Devnet Program](https://img.shields.io/badge/Solana-Devnet-9945FF?logo=solana)](https://explorer.solana.com/address/SoLQueueXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX?cluster=devnet)
+[![Devnet Program](https://img.shields.io/badge/Solana-Devnet-9945FF?logo=solana)](https://explorer.solana.com/address/EuzHoVFafwymNComWL1K1ehEt4V6d1CpGx5mUqsQP8r4?cluster=devnet)
 
 ---
 
@@ -258,6 +258,12 @@ anchor test
 
 ## 🔗 Devnet Transaction Links
 
+**Program Deployment:**
+- Program ID: `EuzHoVFafwymNComWL1K1ehEt4V6d1CpGx5mUqsQP8r4`
+- Deploy Transaction: [53XyPhvxHP5VxNrsL826b5c5qtcNBBj9HrBB3CG1vKKURnKenxpUKqojgwfUuo6Ci83P3azonVNBcbnehm8FkUB4](https://explorer.solana.com/tx/53XyPhvxHP5VxNrsL826b5c5qtcNBBj9HrBB3CG1vKKURnKenxpUKqojgwfUuo6Ci83P3azonVNBcbnehm8FkUB4?cluster=devnet)
+
+**Instruction Transactions:**
+
 | Instruction | Transaction |
 |-------------|------------|
 | initialize_queue | [View on Explorer](https://explorer.solana.com/tx/REPLACE_TX_1?cluster=devnet) |
@@ -268,7 +274,7 @@ anchor test
 | fail_job         | [View on Explorer](https://explorer.solana.com/tx/REPLACE_TX_6?cluster=devnet) |
 | expire_job       | [View on Explorer](https://explorer.solana.com/tx/REPLACE_TX_7?cluster=devnet) |
 
-> Update these links after running `anchor deploy` and the test suite against Devnet.
+> Update instruction transaction links after running the test suite against Devnet.
 
 ---
 
