@@ -22,7 +22,7 @@ import * as path from "path";
 
 const PROGRAM_ID = new PublicKey("EuzHoVFafwymNComWL1K1ehEt4V6d1CpGx5mUqsQP8r4");
 const DEVNET_URL = clusterApiUrl("devnet");
-const IDL_PATH   = path.join(__dirname, "../../target/idl/solqueue.json");
+const IDL_PATH   = path.join(__dirname, "../../../target/idl/solqueue.json");
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
