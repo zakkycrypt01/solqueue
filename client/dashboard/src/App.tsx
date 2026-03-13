@@ -9,7 +9,9 @@ import {
   Send, Users, BarChart3, AlertCircle, PauseCircle, PlayCircle
 } from "lucide-react";
 
-import IDL from "../../../target/idl/solqueue.json";
+// @ts-ignore - IDL type from @coral-xyz/anchor doesn't match exact JSON structure
+import IDLJson from "../../../target/idl/solqueue.json";
+const IDL = IDLJson as any;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -114,8 +116,24 @@ function StatCard({ label, value, icon: Icon, color }: {
   );
 }
 
-function JobRow({ job }: { job: JobItem }) {
+function JobRow({ 
+  job, 
+  wallet,
+  onClaim,
+  onComplete,
+  onFail,
+}: { 
+  job: JobItem;
+  wallet: any;
+  onClaim: (seq: number) => Promise<void>;
+  onComplete: (seq: number) => Promise<void>;
+  onFail: (seq: number) => Promise<void>;
+}) {
   const { label, color, icon: StatusIcon } = statusConfig(job.status);
+  const canClaim = job.status === "pending" && wallet.connected;
+  const canComplete = job.status === "processing" && wallet.connected && job.assignedWorker === wallet.publicKey?.toBase58();
+  const canFail = job.status === "processing" && wallet.connected && job.assignedWorker === wallet.publicKey?.toBase58();
+
   return (
     <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
       <td className="py-3 px-4 font-mono text-sm text-gray-700">#{job.seq}</td>
@@ -139,11 +157,40 @@ function JobRow({ job }: { job: JobItem }) {
       <td className="py-3 px-4 text-xs text-gray-500">
         {new Date(job.enqueuedAt * 1000).toLocaleTimeString()}
       </td>
-      <td className="py-3 px-4">
+      <td className="py-3 px-4 flex items-center gap-2">
         <a href={explorerAddr(job.pubkey)} target="_blank" rel="noopener noreferrer"
            className="text-purple-600 hover:underline font-mono text-xs">
           {job.pubkey.slice(0, 8)}…
         </a>
+        <div className="flex gap-1">
+          {canClaim && (
+            <button
+              onClick={() => onClaim(job.seq)}
+              className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+              title="Claim this job for processing"
+            >
+              Claim
+            </button>
+          )}
+          {canComplete && (
+            <button
+              onClick={() => onComplete(job.seq)}
+              className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors"
+              title="Mark as completed"
+            >
+              Complete
+            </button>
+          )}
+          {canFail && (
+            <button
+              onClick={() => onFail(job.seq)}
+              className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
+              title="Mark as failed (will retry)"
+            >
+              Fail
+            </button>
+          )}
+        </div>
       </td>
     </tr>
   );
@@ -238,9 +285,109 @@ export default function App() {
 
   // ── Enqueue Job Handler ──────────────────────────────────────────────────
 
+  // ── Fetch Jobs ──────────────────────────────────────────────────────────
+
+  const fetchJobs = useCallback(async () => {
+    if (!stats) return;
+
+    try {
+      const allJobs: JobItem[] = [];
+      
+      // Fetch jobs from seq 0 to nextJobSeq - 1
+      for (let seq = 0; seq < Math.min(stats.nextJobSeq, 50); seq++) {
+        try {
+          const jobPDA = deriveJobPDA(queueName, seq);
+          const accountInfo = await CONNECTION.getAccountInfo(jobPDA);
+          
+          if (!accountInfo) continue;
+
+          // Parse Job account: queue(32) + seq(8) + status(1) + job_type(32 null-padded) + 
+          //                     payload(512) + priority(1) + retry_count(1) + assigned_worker(32) + 
+          //                     creator(32) + enqueued_at(8) + completed_at(8) + result(128)
+          const data = accountInfo.data;
+          let offset = 8; // Skip discriminator
+
+          const queue = new PublicKey(data.slice(offset, offset + 32));
+          offset += 32;
+
+          const seqRead = Number(data.readBigUInt64LE(offset));
+          offset += 8;
+
+          // Status is a Rust enum, first byte indicates variant (0=pending, 1=processing, 2=completed, 3=failed)
+          const statusRaw = data[offset];
+          offset += 1;
+
+          let status: JobItem["status"] = "pending";
+          if (statusRaw === 1) status = "processing";
+          else if (statusRaw === 2) status = "completed";
+          else if (statusRaw === 3) status = "failed";
+
+          const jobTypeBytes = data.slice(offset, offset + 32);
+          const jobType = trimNull(jobTypeBytes);
+          offset += 32;
+
+          const payloadBytes = data.slice(offset, offset + 512);
+          offset += 512;
+
+          const priority = data[offset];
+          offset += 1;
+
+          const retryCount = data[offset];
+          offset += 1;
+
+          const maxRetriesBytes = data.slice(offset, offset + 1);
+          const maxRetries = maxRetriesBytes[0];
+          offset += 1;
+
+          const assignedWorker = new PublicKey(data.slice(offset, offset + 32));
+          offset += 32;
+
+          const creator = new PublicKey(data.slice(offset, offset + 32));
+          offset += 32;
+
+          const enqueuedAt = Number(data.readBigUInt64LE(offset));
+          offset += 8;
+
+          const completedAt = Number(data.readBigUInt64LE(offset));
+          offset += 8;
+
+          const resultBytes = data.slice(offset, Math.min(offset + 128, data.length));
+
+          allJobs.push({
+            pubkey: jobPDA.toBase58(),
+            seq: seqRead,
+            jobType,
+            status,
+            priority,
+            retryCount,
+            maxRetries,
+            assignedWorker: assignedWorker.toBase58() === "11111111111111111111111111111111" ? null : assignedWorker.toBase58(),
+            creator: creator.toBase58(),
+            enqueuedAt,
+            completedAt: completedAt === 0 ? null : completedAt,
+            result: trimNull(resultBytes),
+          });
+        } catch (e) {
+          // Job account doesn't exist yet, skip
+        }
+      }
+
+      setJobs(allJobs);
+    } catch (e: any) {
+      console.error("Error fetching jobs:", e);
+    }
+  }, [stats, queueName]);
+
+  // ── Enqueue Job Handler ──────────────────────────────────────────────────
+
   const handleEnqueueJob = useCallback(async () => {
     if (!wallet.publicKey) {
       setStatusMsg("❌ Please connect your Solana wallet first");
+      return;
+    }
+
+    if (!stats) {
+      setStatusMsg("❌ Queue stats not loaded");
       return;
     }
 
@@ -262,24 +409,249 @@ export default function App() {
         return;
       }
 
-      // For now, show CLI command to use instead
-      const cliCommand = `node dist/index.js enqueue ${queueName} ${jobType} '${payload}'`;
-      setStatusMsg(`📋 Use CLI: ${cliCommand}`);
+      // Create program instance with wallet provider
+      // @ts-ignore - wallet adapter types not fully compatible with AnchorProvider
+      const provider = new anchor.AnchorProvider(CONNECTION, wallet as any, { commitment: "confirmed" });
+      // @ts-ignore - IDL type mismatch with AnchorProvider
+      const program = new anchor.Program(IDL, PROGRAM_ID, provider);
+
+      const queuePDA = deriveQueuePDA(queueName);
+      const seq = stats.nextJobSeq;
+      const jobPDA = deriveJobPDA(queueName, seq);
+
+      // Build the enqueue_job transaction
+      // @ts-ignore - complex recursion in type inference  
+      const tx = await program.methods.enqueueJob(queueName, new BN(seq), {
+        queueName,
+        jobType,
+        payload: Array.from(payloadBytes),
+        priority: parseInt(priority),
+        maxRetriesOverride: null,
+      })
+        .accounts({
+          creator: wallet.publicKey,
+          queueConfig: queuePDA,
+          job: jobPDA,
+          systemProgram: SystemProgram.programId,
+        })
+        .transaction();
+
+      tx.feePayer = wallet.publicKey;
+      tx.recentBlockhash = (await CONNECTION.getLatestBlockhash()).blockhash;
+
+      if (!wallet.signTransaction) {
+        setStatusMsg("❌ Wallet does not support signing transactions");
+        return;
+      }
+
+      setStatusMsg("⏳ Signing transaction...");
+      const signedTx = await wallet.signTransaction(tx);
+
+      setStatusMsg("⏳ Sending transaction...");
+      const sig = await CONNECTION.sendRawTransaction(signedTx.serialize());
+
+      setStatusMsg(`⏳ Confirming... ${sig.slice(0, 8)}...`);
+      await CONNECTION.confirmTransaction(sig);
+
+      setStatusMsg(`✅ Job enqueued! TX: ${sig.slice(0, 8)}...`);
       
-      // Copy to clipboard
-      navigator.clipboard.writeText(cliCommand);
-      
+      // Reset form
+      setPayload('{"to":"user@example.com"}');
+      setJobType("send_email");
+      setPriority("0");
+
+      // Refresh queue stats and jobs
+      setTimeout(() => {
+        fetchQueue();
+        fetchJobs();
+      }, 2000);
     } catch (e: any) {
       console.error("Enqueue error:", e);
-      setStatusMsg(`❌ ${e.message || "Failed to prepare transaction"}`);
+      setStatusMsg(`❌ ${e.message || "Failed to enqueue job"}`);
     }
-  }, [wallet, queueName, jobType, payload, priority]);
+  }, [wallet, stats, queueName, jobType, payload, priority, fetchQueue, fetchJobs]);
+
+  // ── Claim Job Handler ────────────────────────────────────────────────────
+
+  const handleClaimJob = useCallback(async (seq: number) => {
+    if (!wallet.publicKey) {
+      setStatusMsg("❌ Please connect your Solana wallet first");
+      return;
+    }
+
+    try {
+      setStatusMsg(`⏳ Claiming job ${seq}...`);
+
+      // @ts-ignore - wallet adapter types not fully compatible with AnchorProvider
+      const provider = new anchor.AnchorProvider(CONNECTION, wallet as any, { commitment: "confirmed" });
+      // @ts-ignore - IDL type mismatch with AnchorProvider
+      const program = new anchor.Program(IDL, PROGRAM_ID, provider);
+
+      const queuePDA = deriveQueuePDA(queueName);
+      const jobPDA = deriveJobPDA(queueName, seq);
+      const [workerPDA] = PublicKey.findProgramAddressSync(
+        [Buffer.from("worker"), Buffer.from(queueName), wallet.publicKey.toBuffer()],
+        PROGRAM_ID
+      );
+
+      const tx = await program.methods.claimJob(queueName, new BN(seq))
+        .accounts({
+          worker: wallet.publicKey,
+          queueConfig: queuePDA,
+          workerRegistry: workerPDA,
+          job: jobPDA,
+        })
+        .transaction();
+
+      tx.feePayer = wallet.publicKey;
+      tx.recentBlockhash = (await CONNECTION.getLatestBlockhash()).blockhash;
+
+      if (!wallet.signTransaction) {
+        setStatusMsg("❌ Wallet does not support signing transactions");
+        return;
+      }
+
+      setStatusMsg("⏳ Signing claim transaction...");
+      const signedTx = await wallet.signTransaction(tx);
+
+      setStatusMsg("⏳ Sending transaction...");
+      const sig = await CONNECTION.sendRawTransaction(signedTx.serialize());
+
+      await CONNECTION.confirmTransaction(sig);
+      setStatusMsg(`✅ Job claimed! TX: ${sig.slice(0, 8)}...`);
+
+      setTimeout(() => fetchJobs(), 2000);
+    } catch (e: any) {
+      console.error("Claim error:", e);
+      setStatusMsg(`❌ ${e.message || "Failed to claim job"}`);
+    }
+  }, [wallet, queueName, fetchJobs]);
+
+  // ── Complete Job Handler ─────────────────────────────────────────────────
+
+  const handleCompleteJob = useCallback(async (seq: number) => {
+    if (!wallet.publicKey) {
+      setStatusMsg("❌ Please connect your Solana wallet first");
+      return;
+    }
+
+    try {
+      setStatusMsg(`⏳ Completing job ${seq}...`);
+
+      // @ts-ignore - wallet adapter types not fully compatible with AnchorProvider
+      const provider = new anchor.AnchorProvider(CONNECTION, wallet as any, { commitment: "confirmed" });
+      // @ts-ignore - IDL type mismatch with AnchorProvider
+      const program = new anchor.Program(IDL, PROGRAM_ID, provider);
+
+      const queuePDA = deriveQueuePDA(queueName);
+      const jobPDA = deriveJobPDA(queueName, seq);
+      const [workerPDA] = PublicKey.findProgramAddressSync(
+        [Buffer.from("worker"), Buffer.from(queueName), wallet.publicKey.toBuffer()],
+        PROGRAM_ID
+      );
+
+      const tx = await program.methods.completeJob(queueName, new BN(seq), {
+        result: Buffer.from("Completed via dashboard"),
+      })
+        .accounts({
+          worker: wallet.publicKey,
+          queueConfig: queuePDA,
+          workerRegistry: workerPDA,
+          job: jobPDA,
+        })
+        .transaction();
+
+      tx.feePayer = wallet.publicKey;
+      tx.recentBlockhash = (await CONNECTION.getLatestBlockhash()).blockhash;
+
+      if (!wallet.signTransaction) {
+        setStatusMsg("❌ Wallet does not support signing transactions");
+        return;
+      }
+
+      setStatusMsg("⏳ Signing complete transaction...");
+      const signedTx = await wallet.signTransaction(tx);
+
+      setStatusMsg("⏳ Sending transaction...");
+      const sig = await CONNECTION.sendRawTransaction(signedTx.serialize());
+
+      await CONNECTION.confirmTransaction(sig);
+      setStatusMsg(`✅ Job completed! TX: ${sig.slice(0, 8)}...`);
+
+      setTimeout(() => fetchJobs(), 2000);
+    } catch (e: any) {
+      console.error("Complete error:", e);
+      setStatusMsg(`❌ ${e.message || "Failed to complete job"}`);
+    }
+  }, [wallet, queueName, fetchJobs]);
+
+  // ── Fail Job Handler ─────────────────────────────────────────────────────
+
+  const handleFailJob = useCallback(async (seq: number) => {
+    if (!wallet.publicKey) {
+      setStatusMsg("❌ Please connect your Solana wallet first");
+      return;
+    }
+
+    try {
+      setStatusMsg(`⏳ Failing job ${seq}...`);
+
+      // @ts-ignore - wallet adapter types not fully compatible with AnchorProvider
+      const provider = new anchor.AnchorProvider(CONNECTION, wallet as any, { commitment: "confirmed" });
+      // @ts-ignore - IDL type mismatch with AnchorProvider
+      const program = new anchor.Program(IDL, PROGRAM_ID, provider);
+
+      const queuePDA = deriveQueuePDA(queueName);
+      const jobPDA = deriveJobPDA(queueName, seq);
+      const [workerPDA] = PublicKey.findProgramAddressSync(
+        [Buffer.from("worker"), Buffer.from(queueName), wallet.publicKey.toBuffer()],
+        PROGRAM_ID
+      );
+
+      const tx = await program.methods.failJob(queueName, new BN(seq), {
+        reason: Buffer.from("Failed via dashboard"),
+      })
+        .accounts({
+          worker: wallet.publicKey,
+          queueConfig: queuePDA,
+          workerRegistry: workerPDA,
+          job: jobPDA,
+        })
+        .transaction();
+
+      tx.feePayer = wallet.publicKey;
+      tx.recentBlockhash = (await CONNECTION.getLatestBlockhash()).blockhash;
+
+      if (!wallet.signTransaction) {
+        setStatusMsg("❌ Wallet does not support signing transactions");
+        return;
+      }
+
+      setStatusMsg("⏳ Signing fail transaction...");
+      const signedTx = await wallet.signTransaction(tx);
+
+      setStatusMsg("⏳ Sending transaction...");
+      const sig = await CONNECTION.sendRawTransaction(signedTx.serialize());
+
+      await CONNECTION.confirmTransaction(sig);
+      setStatusMsg(`✅ Job failed (marked for retry or dead-letter). TX: ${sig.slice(0, 8)}...`);
+
+      setTimeout(() => fetchJobs(), 2000);
+    } catch (e: any) {
+      console.error("Fail error:", e);
+      setStatusMsg(`❌ ${e.message || "Failed to mark job as failed"}`);
+    }
+  }, [wallet, queueName, fetchJobs]);
 
   useEffect(() => {
     fetchQueue();
-    const interval = setInterval(fetchQueue, 10000);
+    setTimeout(fetchJobs, 500);
+    const interval = setInterval(() => {
+      fetchQueue();
+      fetchJobs();
+    }, 10000);
     return () => clearInterval(interval);
-  }, [fetchQueue]);
+  }, [fetchQueue, fetchJobs]);
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -451,13 +823,22 @@ export default function App() {
                   <table className="w-full text-left">
                     <thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wide">
                       <tr>
-                        {["Seq", "Type", "Status", "Priority", "Retries", "Worker", "Enqueued", "PDA"].map(h => (
+                        {["Seq", "Type", "Status", "Priority", "Retries", "Worker", "Enqueued", "Actions"].map(h => (
                           <th key={h} className="py-3 px-4">{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {jobs.map(job => <JobRow key={job.pubkey} job={job} />)}
+                      {jobs.map(job => (
+                        <JobRow 
+                          key={job.pubkey} 
+                          job={job}
+                          wallet={wallet}
+                          onClaim={handleClaimJob}
+                          onComplete={handleCompleteJob}
+                          onFail={handleFailJob}
+                        />
+                      ))}
                     </tbody>
                   </table>
                 </div>
@@ -476,7 +857,7 @@ export default function App() {
             the Solana runtime. No trusted broker, no central server. Just math.
           </p>
           <div className="mt-3 flex gap-3">
-            <a href="https://github.com/your-org/solqueue" target="_blank" rel="noopener noreferrer"
+            <a href="https://github.com/zakkycrypt01/solqueue" target="_blank" rel="noopener noreferrer"
                className="text-xs text-purple-700 underline">GitHub Repo</a>
             <a href={`https://explorer.solana.com/address/${PROGRAM_ID.toBase58()}?cluster=devnet`}
                target="_blank" rel="noopener noreferrer"
