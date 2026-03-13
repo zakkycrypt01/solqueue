@@ -438,10 +438,10 @@ export default function App() {
       // Build the enqueue_job transaction
       // @ts-ignore - complex recursion in type inference  
       const tx = await program.methods.enqueueJob(queueName, new BN(seq), {
-        queueName,
-        jobType,
-        payload: Array.from(payloadBytes),
-        priority: parseInt(priority),
+        queueName: queueName,
+        jobType: jobType,
+        payload: [...payloadBytes],
+        priority: parseInt(priority) || 0,
         maxRetriesOverride: null,
       })
         .accounts({
