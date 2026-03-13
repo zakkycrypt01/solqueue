@@ -9,7 +9,7 @@ import {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const PROGRAM_ID = new PublicKey("6uV8wfz1hufYYYGobTfvFfxETtmJusawL4vM7HhPzJdP");
+const PROGRAM_ID = new PublicKey("EuzHoVFafwymNComWL1K1ehEt4V6d1CpGx5mUqsQP8r4");
 const CONNECTION  = new Connection(clusterApiUrl("devnet"), "confirmed");
 
 // ─── Types ────────────────────────────────────────────────────────────────────

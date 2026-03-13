@@ -20,7 +20,7 @@ import * as path from "path";
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 
-const PROGRAM_ID = new PublicKey("6uV8wfz1hufYYYGobTfvFfxETtmJusawL4vM7HhPzJdP");
+const PROGRAM_ID = new PublicKey("EuzHoVFafwymNComWL1K1ehEt4V6d1CpGx5mUqsQP8r4");
 const DEVNET_URL = clusterApiUrl("devnet");
 const IDL_PATH   = path.join(__dirname, "../../target/idl/solqueue.json");
 
@@ -44,14 +44,14 @@ function setupProvider(keypair: Keypair) {
   return new anchor.AnchorProvider(connection, wallet, { commitment: "confirmed" });
 }
 
-function loadProgram(provider: anchor.AnchorProvider) {
+function loadProgram(provider: anchor.AnchorProvider): anchor.Program<any> {
   if (!fs.existsSync(IDL_PATH)) {
     console.error(chalk.red(`❌ IDL not found at ${IDL_PATH}`));
     console.error(chalk.yellow("   Run: anchor build"));
     process.exit(1);
   }
   const idl = JSON.parse(fs.readFileSync(IDL_PATH, "utf-8"));
-  return new anchor.Program(idl, provider);
+  return new anchor.Program(idl, provider) as anchor.Program<any>;
 }
 
 async function deriveQueuePDA(programId: PublicKey, queueName: string): Promise<[PublicKey, number]> {
@@ -125,6 +125,7 @@ program
 
     const spinner = ora(`Initializing queue '${queueName}'...`).start();
     try {
+      // @ts-ignore - Anchor type inference issue with dynamic IDL
       const tx = await prog.methods
         .initializeQueue({
           queueName,
@@ -198,7 +199,8 @@ program
     const prog = loadProgram(provider);
 
     const [queuePDA] = await deriveQueuePDA(PROGRAM_ID, queueName);
-    const queueAccount = await prog.account.queueConfig.fetch(queuePDA);
+    // @ts-ignore - Dynamic account namespace
+    const queueAccount = await (prog.account as any).queueConfig.fetch(queuePDA);
     const seq = queueAccount.nextJobSeq.toNumber();
     const [jobPDA] = await deriveJobPDA(PROGRAM_ID, queueName, seq);
 
@@ -348,7 +350,8 @@ program
     const [jobPDA]   = await deriveJobPDA(PROGRAM_ID, queueName, seq);
 
     try {
-      const job = await prog.account.job.fetch(jobPDA);
+      // @ts-ignore - Dynamic account namespace  
+      const job = await (prog.account as any).job.fetch(jobPDA);
       console.log(chalk.cyan(`\n⚙️  Job #${seq} on queue '${queueName}'\n`));
       console.log(`  Status:    ${statusColor(job.status)}`);
       console.log(`  Type:      ${chalk.white(Buffer.from(job.jobType).toString("utf-8").replace(/\0/g, ""))}`);
@@ -383,7 +386,8 @@ program
 
     const spinner = ora("Fetching queue data...").start();
     try {
-      const queue = await prog.account.queueConfig.fetch(queuePDA);
+      // @ts-ignore - Dynamic account namespace
+      const queue = await (prog.account as any).queueConfig.fetch(queuePDA);
       spinner.stop();
 
       console.log(chalk.cyan(`\n⚙️  SolQueue Dashboard — '${queueName}'\n`));
@@ -412,7 +416,8 @@ program
       for (let seq = startSeq; seq < queue.nextJobSeq.toNumber(); seq++) {
         try {
           const [jobPDA] = await deriveJobPDA(PROGRAM_ID, queueName, seq);
-          const job = await prog.account.job.fetch(jobPDA);
+          // @ts-ignore - Dynamic account namespace
+          const job = await (prog.account as any).job.fetch(jobPDA);
           jobs.push({ seq, job });
         } catch {
           // Job might be closed (rent reclaimed)
@@ -429,7 +434,7 @@ program
             statusColor(job.status),
             job.priority.toString(),
             `${job.retryCount}/${job.maxRetries}`,
-            job.assignedWorker?.toBase58().slice(0, 8) + "..." ?? "-",
+            (job.assignedWorker?.toBase58().slice(0, 8) ?? "") + (job.assignedWorker ? "..." : ""),
           ]),
         ];
         console.log(table(jobTableData));

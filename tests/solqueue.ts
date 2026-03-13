@@ -121,7 +121,7 @@ describe("SolQueue — On-Chain Job Queue", () => {
         authority: authority.publicKey,
         queueConfig: queuePDA,
         systemProgram: SystemProgram.programId,
-      })
+      } as any)
       .rpc();
 
     console.log(`     ✅ initializeQueue tx: ${tx}`);
@@ -143,13 +143,14 @@ describe("SolQueue — On-Chain Job Queue", () => {
 
     const tx1 = await program.methods
       .registerWorker(QUEUE_NAME)
+      // @ts-ignore - Anchor account resolution type issue
       .accounts({
         authority: authority.publicKey,
         queueConfig: queuePDA,
         worker: worker1.publicKey,
         workerRegistry: worker1PDA,
         systemProgram: SystemProgram.programId,
-      })
+      } as any)
       .rpc();
 
     const tx2 = await program.methods
@@ -160,7 +161,7 @@ describe("SolQueue — On-Chain Job Queue", () => {
         worker: worker2.publicKey,
         workerRegistry: worker2PDA,
         systemProgram: SystemProgram.programId,
-      })
+      } as any)
       .rpc();
 
     console.log(`     ✅ registerWorker(1) tx: ${tx1}`);
@@ -196,7 +197,7 @@ describe("SolQueue — On-Chain Job Queue", () => {
         queueConfig: queuePDA,
         job: jobPDA,
         systemProgram: SystemProgram.programId,
-      })
+      } as any)
       .signers([creator])
       .rpc();
 
@@ -214,7 +215,7 @@ describe("SolQueue — On-Chain Job Queue", () => {
         queueConfig: queuePDA,
         workerRegistry: worker1PDA,
         job: jobPDA,
-      })
+      } as any)
       .signers([worker1])
       .rpc();
 
@@ -234,7 +235,7 @@ describe("SolQueue — On-Chain Job Queue", () => {
         queueConfig: queuePDA,
         workerRegistry: worker1PDA,
         job: jobPDA,
-      })
+      } as any)
       .signers([worker1])
       .rpc();
 
@@ -271,7 +272,7 @@ describe("SolQueue — On-Chain Job Queue", () => {
           queueConfig: queuePDA,
           job: jobPDA,
           systemProgram: SystemProgram.programId,
-        })
+        } as any)
         .signers([creator])
         .rpc();
     }
@@ -281,11 +282,11 @@ describe("SolQueue — On-Chain Job Queue", () => {
     const [job2PDA] = await deriveJobPDA(program, QUEUE_NAME, 2);
 
     await program.methods.claimJob(QUEUE_NAME, new BN(1))
-      .accounts({ worker: worker1.publicKey, queueConfig: queuePDA, workerRegistry: w1PDA, job: job1PDA })
+      .accounts({ worker: worker1.publicKey, queueConfig: queuePDA, workerRegistry: w1PDA, job: job1PDA } as any)
       .signers([worker1]).rpc();
 
     await program.methods.claimJob(QUEUE_NAME, new BN(2))
-      .accounts({ worker: worker2.publicKey, queueConfig: queuePDA, workerRegistry: w2PDA, job: job2PDA })
+      .accounts({ worker: worker2.publicKey, queueConfig: queuePDA, workerRegistry: w2PDA, job: job2PDA } as any)
       .signers([worker2]).rpc();
 
     const j1 = await program.account.job.fetch(job1PDA);
@@ -307,12 +308,12 @@ describe("SolQueue — On-Chain Job Queue", () => {
 
     // Claim seq=3
     await program.methods.claimJob(QUEUE_NAME, new BN(seq))
-      .accounts({ worker: worker1.publicKey, queueConfig: queuePDA, workerRegistry: w1PDA, job: jobPDA })
+      .accounts({ worker: worker1.publicKey, queueConfig: queuePDA, workerRegistry: w1PDA, job: jobPDA } as any)
       .signers([worker1]).rpc();
 
     // Fail attempt 1 → retry_count=1, status→Pending
     await program.methods.failJob(QUEUE_NAME, new BN(seq), { reason: "payment gateway timeout" })
-      .accounts({ worker: worker1.publicKey, queueConfig: queuePDA, workerRegistry: w1PDA, job: jobPDA })
+      .accounts({ worker: worker1.publicKey, queueConfig: queuePDA, workerRegistry: w1PDA, job: jobPDA } as any)
       .signers([worker1]).rpc();
 
     let job = await program.account.job.fetch(jobPDA);
@@ -322,11 +323,11 @@ describe("SolQueue — On-Chain Job Queue", () => {
 
     // Re-claim and fail again → retry_count=2, still under max (2)
     await program.methods.claimJob(QUEUE_NAME, new BN(seq))
-      .accounts({ worker: worker1.publicKey, queueConfig: queuePDA, workerRegistry: w1PDA, job: jobPDA })
+      .accounts({ worker: worker1.publicKey, queueConfig: queuePDA, workerRegistry: w1PDA, job: jobPDA } as any)
       .signers([worker1]).rpc();
 
     await program.methods.failJob(QUEUE_NAME, new BN(seq), { reason: "still failing" })
-      .accounts({ worker: worker1.publicKey, queueConfig: queuePDA, workerRegistry: w1PDA, job: jobPDA })
+      .accounts({ worker: worker1.publicKey, queueConfig: queuePDA, workerRegistry: w1PDA, job: jobPDA } as any)
       .signers([worker1]).rpc();
 
     job = await program.account.job.fetch(jobPDA);
@@ -335,11 +336,11 @@ describe("SolQueue — On-Chain Job Queue", () => {
 
     // Claim and fail once more → retry_count=3 > max_retries(2) → permanently Failed
     await program.methods.claimJob(QUEUE_NAME, new BN(seq))
-      .accounts({ worker: worker1.publicKey, queueConfig: queuePDA, workerRegistry: w1PDA, job: jobPDA })
+      .accounts({ worker: worker1.publicKey, queueConfig: queuePDA, workerRegistry: w1PDA, job: jobPDA } as any)
       .signers([worker1]).rpc();
 
     await program.methods.failJob(QUEUE_NAME, new BN(seq), { reason: "final failure" })
-      .accounts({ worker: worker1.publicKey, queueConfig: queuePDA, workerRegistry: w1PDA, job: jobPDA })
+      .accounts({ worker: worker1.publicKey, queueConfig: queuePDA, workerRegistry: w1PDA, job: jobPDA } as any)
       .signers([worker1]).rpc();
 
     job = await program.account.job.fetch(jobPDA);
@@ -366,13 +367,12 @@ describe("SolQueue — On-Chain Job Queue", () => {
         payload: Buffer.from("{}"),
         priority: 0,
         maxRetriesOverride: null,
-      })
-      .accounts({ creator: creator.publicKey, queueConfig: queuePDA, job: jobPDA, systemProgram: SystemProgram.programId })
+      })      // @ts-ignore - Anchor account resolution type issue      .accounts({ creator: creator.publicKey, queueConfig: queuePDA, job: jobPDA, systemProgram: SystemProgram.programId })
       .signers([creator]).rpc();
 
     try {
       await program.methods.claimJob(QUEUE_NAME, new BN(seq))
-        .accounts({ worker: rogue.publicKey, queueConfig: queuePDA, workerRegistry: roguePDA, job: jobPDA })
+        .accounts({ worker: rogue.publicKey, queueConfig: queuePDA, workerRegistry: roguePDA, job: jobPDA } as any)
         .signers([rogue]).rpc();
       assert.fail("Should have thrown — unregistered worker");
     } catch (err: any) {
@@ -386,7 +386,7 @@ describe("SolQueue — On-Chain Job Queue", () => {
   it("7. Paused queue rejects new enqueue, existing jobs unaffected", async () => {
     // Pause the queue
     await program.methods.setQueuePaused(QUEUE_NAME, true)
-      .accounts({ authority: authority.publicKey, queueConfig: queuePDA })
+      .accounts({ authority: authority.publicKey, queueConfig: queuePDA } as any)
       .rpc();
 
     let queue = await program.account.queueConfig.fetch(queuePDA);
@@ -405,8 +405,7 @@ describe("SolQueue — On-Chain Job Queue", () => {
           payload: Buffer.from("{}"),
           priority: 0,
           maxRetriesOverride: null,
-        })
-        .accounts({ creator: creator.publicKey, queueConfig: queuePDA, job: jobPDA, systemProgram: SystemProgram.programId })
+        })        // @ts-ignore - Anchor account resolution type issue        .accounts({ creator: creator.publicKey, queueConfig: queuePDA, job: jobPDA, systemProgram: SystemProgram.programId })
         .signers([creator]).rpc();
       assert.fail("Should have thrown QueuePaused");
     } catch (err: any) {
@@ -416,7 +415,7 @@ describe("SolQueue — On-Chain Job Queue", () => {
 
     // Resume
     await program.methods.setQueuePaused(QUEUE_NAME, false)
-      .accounts({ authority: authority.publicKey, queueConfig: queuePDA })
+      .accounts({ authority: authority.publicKey, queueConfig: queuePDA } as any)
       .rpc();
 
     queue = await program.account.queueConfig.fetch(queuePDA);
@@ -434,13 +433,13 @@ describe("SolQueue — On-Chain Job Queue", () => {
 
     // Worker1 claims the job
     await program.methods.claimJob(QUEUE_NAME, new BN(seq))
-      .accounts({ worker: worker1.publicKey, queueConfig: queuePDA, workerRegistry: w1PDA, job: jobPDA })
+      .accounts({ worker: worker1.publicKey, queueConfig: queuePDA, workerRegistry: w1PDA, job: jobPDA } as any)
       .signers([worker1]).rpc();
 
     // Worker2 tries to complete it — should fail
     try {
       await program.methods.completeJob(QUEUE_NAME, new BN(seq), { result: Buffer.from("stolen!") })
-        .accounts({ worker: worker2.publicKey, queueConfig: queuePDA, workerRegistry: w2PDA, job: jobPDA })
+        .accounts({ worker: worker2.publicKey, queueConfig: queuePDA, workerRegistry: w2PDA, job: jobPDA } as any)
         .signers([worker2]).rpc();
       assert.fail("Should have thrown WrongWorker");
     } catch (err: any) {
@@ -458,7 +457,7 @@ describe("SolQueue — On-Chain Job Queue", () => {
     const balanceBefore = await provider.connection.getBalance(creator.publicKey);
 
     await program.methods.closeJob(QUEUE_NAME, new BN(seq))
-      .accounts({ creator: creator.publicKey, queueConfig: queuePDA, job: jobPDA })
+      .accounts({ creator: creator.publicKey, queueConfig: queuePDA, job: jobPDA } as any)
       .signers([creator]).rpc();
 
     const balanceAfter = await provider.connection.getBalance(creator.publicKey);
