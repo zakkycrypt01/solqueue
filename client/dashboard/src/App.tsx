@@ -2,12 +2,14 @@ import { useState, useEffect, useCallback } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import * as anchor from "@coral-xyz/anchor";
-import { Connection, PublicKey, SystemProgram, clusterApiUrl } from "@solana/web3.js";
+import { Connection, PublicKey, SystemProgram, clusterApiUrl, Transaction, Keypair } from "@solana/web3.js";
 import { BN } from "@coral-xyz/anchor";
 import {
   Activity, Zap, CheckCircle, XCircle, Clock, RefreshCw,
   Send, Users, BarChart3, AlertCircle, PauseCircle, PlayCircle
 } from "lucide-react";
+
+import IDL from "../../../target/idl/solqueue.json";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -182,32 +184,96 @@ export default function App() {
         return;
       }
 
-      // Parse queue config from account data
-      // Skip 8 bytes (discriminator) and parse manually
+      // Manually parse QueueConfig account structure
+      // Structure: authority(32) + queue_name(32) + next_job_seq(8) + total_enqueued(8) + 
+      //           total_completed(8) + total_failed(8) + is_paused(1) + max_retries(1) + job_timeout_secs(8) + bump(1)
       const data = accountInfo.data;
-      const authority_bytes = data.slice(8, 40);
-      const authority = new PublicKey(authority_bytes).toBase58();
+      let offset = 8; // Skip discriminator
       
-      // For simplified view, show what we can extract
+      const authority = new PublicKey(data.slice(offset, offset + 32));
+      offset += 32;
+      
+      const queue_name_bytes = data.slice(offset, offset + 32);
+      offset += 32;
+      
+      const nextJobSeq = Number(data.readBigUInt64LE(offset));
+      offset += 8;
+      
+      const totalEnqueued = Number(data.readBigUInt64LE(offset));
+      offset += 8;
+      
+      const totalCompleted = Number(data.readBigUInt64LE(offset));
+      offset += 8;
+      
+      const totalFailed = Number(data.readBigUInt64LE(offset));
+      offset += 8;
+      
+      const isPaused = data[offset] === 1;
+      offset += 1;
+      
+      const maxRetries = data[offset];
+      offset += 1;
+      
+      const jobTimeoutSecs = Number(data.readBigInt64LE(offset));
+      
       setStats({
-        authority: authority.slice(0, 8) + "...",
-        nextJobSeq: 0,
-        totalEnqueued: 0,
-        totalCompleted: 0,
-        totalFailed: 0,
-        isPaused: false,
-        maxRetries: 3,
-        jobTimeoutSecs: 300,
+        authority: authority.toBase58().slice(0, 8) + "...",
+        nextJobSeq,
+        totalEnqueued,
+        totalCompleted,
+        totalFailed,
+        isPaused,
+        maxRetries,
+        jobTimeoutSecs: Number(jobTimeoutSecs),
       });
 
       setError(null);
       setLastUpdated(new Date());
     } catch (e: any) {
-      setError(e.message);
+      setError("Error fetching queue: " + e.message);
     } finally {
       setLoading(false);
     }
   }, [queueName]);
+
+  // ── Enqueue Job Handler ──────────────────────────────────────────────────
+
+  const handleEnqueueJob = useCallback(async () => {
+    if (!wallet.publicKey) {
+      setStatusMsg("❌ Please connect your Solana wallet first");
+      return;
+    }
+
+    try {
+      setStatusMsg("⏳ Preparing transaction...");
+
+      // Parse payload as JSON
+      let payloadBytes: Buffer;
+      try {
+        const payloadObj = JSON.parse(payload);
+        payloadBytes = Buffer.from(JSON.stringify(payloadObj));
+      } catch (e) {
+        setStatusMsg("❌ Invalid JSON payload");
+        return;
+      }
+
+      if (payloadBytes.length > 512) {
+        setStatusMsg("❌ Payload exceeds 512 bytes");
+        return;
+      }
+
+      // For now, show CLI command to use instead
+      const cliCommand = `node dist/index.js enqueue ${queueName} ${jobType} '${payload}'`;
+      setStatusMsg(`📋 Use CLI: ${cliCommand}`);
+      
+      // Copy to clipboard
+      navigator.clipboard.writeText(cliCommand);
+      
+    } catch (e: any) {
+      console.error("Enqueue error:", e);
+      setStatusMsg(`❌ ${e.message || "Failed to prepare transaction"}`);
+    }
+  }, [wallet, queueName, jobType, payload, priority]);
 
   useEffect(() => {
     fetchQueue();
@@ -340,11 +406,12 @@ export default function App() {
               </div>
               <div className="mt-4 flex items-center justify-between">
                 <p className="text-xs text-gray-500">
-                  Connect a Solana wallet (Phantom/Backpack) to sign transactions
+                  {wallet.connected ? "✅ Wallet connected" : "❌ Connect a Solana wallet (Phantom/Backpack) to sign transactions"}
                 </p>
                 <button
-                  className="px-5 py-2.5 rounded-lg bg-purple-600 text-white text-sm font-medium hover:bg-purple-700 transition-colors disabled:opacity-40 flex items-center gap-2"
-                  onClick={() => setStatusMsg("Connect a Solana wallet to enqueue jobs")}
+                  disabled={!wallet.connected}
+                  className="px-5 py-2.5 rounded-lg bg-purple-600 text-white text-sm font-medium hover:bg-purple-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
+                  onClick={handleEnqueueJob}
                 >
                   <Send size={14} />
                   Enqueue Job
