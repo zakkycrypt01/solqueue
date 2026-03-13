@@ -301,10 +301,17 @@ export default function App() {
           
           if (!accountInfo) continue;
 
-          // Parse Job account: queue(32) + seq(8) + status(1) + job_type(32 null-padded) + 
-          //                     payload(512) + priority(1) + retry_count(1) + assigned_worker(32) + 
-          //                     creator(32) + enqueued_at(8) + completed_at(8) + result(128)
+          // Parse Job account structure from Anchor IDL:
+          // Discriminator(8) + queue(32) + seq(8) + job_type(32) + payload(512) + 
+          // status(1) + priority(1) + retry_count(1) + max_retries(1) + assigned_worker(33) + 
+          // creator(32) + enqueued_at(8) + completed_at(8) + result(128)
           const data = accountInfo.data;
+          
+          if (data.length < 100) {
+            // Account too small to contain valid job data
+            continue;
+          }
+
           let offset = 8; // Skip discriminator
 
           const queue = new PublicKey(data.slice(offset, offset + 32));
@@ -313,7 +320,16 @@ export default function App() {
           const seqRead = Number(data.readBigUInt64LE(offset));
           offset += 8;
 
-          // Status is a Rust enum, first byte indicates variant (0=pending, 1=processing, 2=completed, 3=failed)
+          // Job type is at offset 48 (8 + 32 + 8)
+          const jobTypeBytes = data.slice(offset, offset + 32);
+          const jobType = trimNull(jobTypeBytes);
+          offset += 32;
+
+          // Payload is at offset 80 (8 + 32 + 8 + 32)
+          const payloadBytes = data.slice(offset, offset + 512);
+          offset += 512;
+
+          // Status is at offset 592 (8 + 32 + 8 + 32 + 512)
           const statusRaw = data[offset];
           offset += 1;
 
@@ -322,33 +338,32 @@ export default function App() {
           else if (statusRaw === 2) status = "completed";
           else if (statusRaw === 3) status = "failed";
 
-          const jobTypeBytes = data.slice(offset, offset + 32);
-          const jobType = trimNull(jobTypeBytes);
-          offset += 32;
-
-          const payloadBytes = data.slice(offset, offset + 512);
-          offset += 512;
-
           const priority = data[offset];
           offset += 1;
 
           const retryCount = data[offset];
           offset += 1;
 
-          const maxRetriesBytes = data.slice(offset, offset + 1);
-          const maxRetries = maxRetriesBytes[0];
+          const maxRetries = data[offset];
           offset += 1;
 
-          const assignedWorker = new PublicKey(data.slice(offset, offset + 32));
-          offset += 32;
+          // assigned_worker is Option<pubkey> - 1 byte for is_some, then 32 bytes if Some
+          const hasAssignedWorker = data[offset] === 1;
+          offset += 1;
+
+          let assignedWorker: string | null = null;
+          if (hasAssignedWorker && offset + 32 <= data.length) {
+            assignedWorker = new PublicKey(data.slice(offset, offset + 32)).toBase58();
+          }
+          offset += 32; // Always skip 32 bytes (whether Some or None)
 
           const creator = new PublicKey(data.slice(offset, offset + 32));
           offset += 32;
 
-          const enqueuedAt = Number(data.readBigUInt64LE(offset));
+          const enqueuedAt = Number(data.readBigInt64LE(offset));
           offset += 8;
 
-          const completedAt = Number(data.readBigUInt64LE(offset));
+          const completedAt = Number(data.readBigInt64LE(offset));
           offset += 8;
 
           const resultBytes = data.slice(offset, Math.min(offset + 128, data.length));
@@ -361,14 +376,15 @@ export default function App() {
             priority,
             retryCount,
             maxRetries,
-            assignedWorker: assignedWorker.toBase58() === "11111111111111111111111111111111" ? null : assignedWorker.toBase58(),
+            assignedWorker: assignedWorker && assignedWorker !== "11111111111111111111111111111111" ? assignedWorker : null,
             creator: creator.toBase58(),
             enqueuedAt,
             completedAt: completedAt === 0 ? null : completedAt,
             result: trimNull(resultBytes),
           });
         } catch (e) {
-          // Job account doesn't exist yet, skip
+          // Job account parsing error, skip this job
+          console.debug(`Job ${seq} parsing error:`, e);
         }
       }
 
