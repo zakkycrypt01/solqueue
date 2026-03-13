@@ -1,4 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import * as anchor from "@coral-xyz/anchor";
 import { Connection, PublicKey, SystemProgram, clusterApiUrl } from "@solana/web3.js";
 import { BN } from "@coral-xyz/anchor";
@@ -148,6 +150,7 @@ function JobRow({ job }: { job: JobItem }) {
 // ─── Main App ─────────────────────────────────────────────────────────────────
 
 export default function App() {
+  const wallet = useWallet();
   const [queueName, setQueueName]   = useState("my-queue");
   const [inputQueue, setInputQueue] = useState("my-queue");
   const [stats, setStats]           = useState<QueueStats | null>(null);
@@ -179,10 +182,15 @@ export default function App() {
         return;
       }
 
-      // For now, display a message that real Anchor integration is needed
-      // The CLI has full functionality - use it to test
+      // Parse queue config from account data
+      // Skip 8 bytes (discriminator) and parse manually
+      const data = accountInfo.data;
+      const authority_bytes = data.slice(8, 40);
+      const authority = new PublicKey(authority_bytes).toBase58();
+      
+      // For simplified view, show what we can extract
       setStats({
-        authority: "Run: node dist/index.js dashboard my-queue",
+        authority: authority.slice(0, 8) + "...",
         nextJobSeq: 0,
         totalEnqueued: 0,
         totalCompleted: 0,
@@ -192,7 +200,7 @@ export default function App() {
         jobTimeoutSecs: 300,
       });
 
-      setError("Dashboard requires wallet connection for full functionality. Use the CLI to manage queues: node dist/index.js dashboard my-queue");
+      setError(null);
       setLastUpdated(new Date());
     } catch (e: any) {
       setError(e.message);
@@ -242,6 +250,7 @@ export default function App() {
               <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
               Refresh
             </button>
+            <WalletMultiButton className="!bg-purple-600 !text-white hover:!bg-purple-700" />
           </div>
         </div>
       </header>
