@@ -266,13 +266,13 @@ anchor test
 
 | Instruction | Transaction |
 |-------------|------------|
-| initialize_queue | [View on Explorer](https://explorer.solana.com/tx/REPLACE_TX_1?cluster=devnet) |
-| register_worker  | [View on Explorer](https://explorer.solana.com/tx/REPLACE_TX_2?cluster=devnet) |
-| enqueue_job      | [View on Explorer](https://explorer.solana.com/tx/REPLACE_TX_3?cluster=devnet) |
-| claim_job        | [View on Explorer](https://explorer.solana.com/tx/REPLACE_TX_4?cluster=devnet) |
-| complete_job     | [View on Explorer](https://explorer.solana.com/tx/REPLACE_TX_5?cluster=devnet) |
-| fail_job         | [View on Explorer](https://explorer.solana.com/tx/REPLACE_TX_6?cluster=devnet) |
-| expire_job       | [View on Explorer](https://explorer.solana.com/tx/REPLACE_TX_7?cluster=devnet) |
+| initialize_queue | [View on Explorer](https://explorer.solana.com/tx/5iZT7LTosjJcLhypEb4uecLrZEYKqRtSQLdE9f5DFd9Fm2T8YmZzogf4wnfxkA5hHPnAnnn5ngKZcVKnHmDDRZxK?cluster=devnet) |
+| register_worker  | [View on Explorer](https://explorer.solana.com/tx/51mVoA2bqxkvgsWUvL9wjP4gz5wh1HsnykvYbFDiPnGXqizctEGnynaXJwEtX6ip8oSQKNX4BUDwpW4ghc7iom3a?cluster=devnet) |
+| enqueue_job      | [View on Explorer](https://explorer.solana.com/tx/2gx5x6SK4CS6gtNHXiexx2LL4MhJQJNxd6B7Furh3TtKSwzA6NnKvpxpdiuuw8VehyyeEvNrS6ZcDua8j7qCsiUa?cluster=devnet) |
+| claim_job        | [View on Explorer](https://explorer.solana.com/tx/4WmozAZ6y7Uv98dZGFKELRczqnyea81JSFkcptbSJ3jiswTvQKLwG3Spp762fftJyvNtm4PzoswVyCLQDZ64K7vD?cluster=devnet) |
+| complete_job     | [View on Explorer](https://explorer.solana.com/tx/4pPTsmnYAqrdXVXy8jkn6YeXYyd3Z9FpGiFNhoC7rKBNHjgBxCwfM7YSU6G3N1V5PezzHUWigNWYhW1aucXcS9ZG?cluster=devnet) |
+<!-- | fail_job         | [View on Explorer](https://explorer.solana.com/tx/REPLACE_TX_6?cluster=devnet) |
+| expire_job       | [View on Explorer](https://explorer.solana.com/tx/REPLACE_TX_7?cluster=devnet) | -->
 
 > Update instruction transaction links after running the test suite against Devnet.
 

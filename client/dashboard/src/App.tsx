@@ -179,11 +179,10 @@ export default function App() {
         return;
       }
 
-      // Manually parse account data using Anchor discriminator + borsh layout
-      // In a real app you'd use program.account.queueConfig.fetch(queuePDA)
-      // Here we use raw RPC for demo simplicity
+      // For now, display a message that real Anchor integration is needed
+      // The CLI has full functionality - use it to test
       setStats({
-        authority: "See on-chain",
+        authority: "Run: node dist/index.js dashboard my-queue",
         nextJobSeq: 0,
         totalEnqueued: 0,
         totalCompleted: 0,
@@ -193,6 +192,7 @@ export default function App() {
         jobTimeoutSecs: 300,
       });
 
+      setError("Dashboard requires wallet connection for full functionality. Use the CLI to manage queues: node dist/index.js dashboard my-queue");
       setLastUpdated(new Date());
     } catch (e: any) {
       setError(e.message);
