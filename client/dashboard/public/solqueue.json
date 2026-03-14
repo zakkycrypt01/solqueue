@@ -1,0 +1,1767 @@
+{
+  "address": "EuzHoVFafwymNComWL1K1ehEt4V6d1CpGx5mUqsQP8r4",
+  "metadata": {
+    "name": "solqueue",
+    "version": "0.1.0",
+    "spec": "0.1.0",
+    "description": "On-Chain Job Queue — Solana Challenge Submission"
+  },
+  "instructions": [
+    {
+      "name": "claim_job",
+      "docs": [
+        "Claim a Pending job for processing. Atomic — Solana's account locking",
+        "prevents two workers from claiming the same job simultaneously.",
+        "",
+        "# Arguments",
+        "* `seq` - The sequence number of the job to claim"
+      ],
+      "discriminator": [
+        9,
+        160,
+        5,
+        231,
+        116,
+        123,
+        198,
+        14
+      ],
+      "accounts": [
+        {
+          "name": "worker",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "queue_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  101,
+                  117,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "queue_name"
+              }
+            ]
+          }
+        },
+        {
+          "name": "worker_registry",
+          "docs": [
+            "Worker must be registered AND active for this queue."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  111,
+                  114,
+                  107,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "queue_name"
+              },
+              {
+                "kind": "account",
+                "path": "worker"
+              }
+            ]
+          }
+        },
+        {
+          "name": "job",
+          "docs": [
+            "The specific job to claim, identified by seq number.",
+            "Solana's account locking guarantees this is atomic — no two transactions",
+            "can mutate this account simultaneously, preventing double-claims."
+          ],
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  106,
+                  111,
+                  98
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "queue_name"
+              },
+              {
+                "kind": "arg",
+                "path": "seq"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "queue_name",
+          "type": "string"
+        },
+        {
+          "name": "seq",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "close_job",
+      "docs": [
+        "Close a Completed or Failed job account, reclaiming rent to the creator.",
+        "Only the job creator can close their job."
+      ],
+      "discriminator": [
+        90,
+        100,
+        180,
+        200,
+        200,
+        163,
+        120,
+        182
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "docs": [
+            "Must be the original job creator to reclaim rent."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "queue_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  101,
+                  117,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "queue_name"
+              }
+            ]
+          }
+        },
+        {
+          "name": "job",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  106,
+                  111,
+                  98
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "queue_name"
+              },
+              {
+                "kind": "arg",
+                "path": "seq"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "queue_name",
+          "type": "string"
+        },
+        {
+          "name": "seq",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "complete_job",
+      "docs": [
+        "Mark a Processing job as successfully Completed.",
+        "Only the worker who claimed the job can call this."
+      ],
+      "discriminator": [
+        221,
+        216,
+        225,
+        72,
+        101,
+        250,
+        3,
+        11
+      ],
+      "accounts": [
+        {
+          "name": "worker",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "queue_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  101,
+                  117,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "queue_name"
+              }
+            ]
+          }
+        },
+        {
+          "name": "worker_registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  111,
+                  114,
+                  107,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "queue_name"
+              },
+              {
+                "kind": "account",
+                "path": "worker"
+              }
+            ]
+          }
+        },
+        {
+          "name": "job",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  106,
+                  111,
+                  98
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "queue_name"
+              },
+              {
+                "kind": "arg",
+                "path": "seq"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "queue_name",
+          "type": "string"
+        },
+        {
+          "name": "seq",
+          "type": "u64"
+        },
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "CompleteJobParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "deactivate_worker",
+      "docs": [
+        "Deactivate a registered worker. Only the queue authority can call this.",
+        "Deactivated workers cannot claim new jobs."
+      ],
+      "discriminator": [
+        103,
+        180,
+        172,
+        161,
+        101,
+        108,
+        191,
+        56
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "queue_config"
+          ]
+        },
+        {
+          "name": "queue_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  101,
+                  117,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "queue_name"
+              }
+            ]
+          }
+        },
+        {
+          "name": "worker"
+        },
+        {
+          "name": "worker_registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  111,
+                  114,
+                  107,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "queue_name"
+              },
+              {
+                "kind": "account",
+                "path": "worker"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "queue_name",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "enqueue_job",
+      "docs": [
+        "Enqueue a new job. Any signer can call this (permissionless producer).",
+        "",
+        "# Arguments",
+        "* `seq`    - Must equal queue.next_job_seq at call time (used in PDA seed)",
+        "* `params` - Job type, payload bytes, priority, optional retry override"
+      ],
+      "discriminator": [
+        15,
+        126,
+        169,
+        237,
+        239,
+        18,
+        69,
+        7
+      ],
+      "accounts": [
+        {
+          "name": "creator",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "queue_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  101,
+                  117,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "queue_name"
+              }
+            ]
+          }
+        },
+        {
+          "name": "job",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  106,
+                  111,
+                  98
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "queue_name"
+              },
+              {
+                "kind": "arg",
+                "path": "seq"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "queue_name",
+          "type": "string"
+        },
+        {
+          "name": "seq",
+          "type": "u64"
+        },
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "EnqueueJobParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "expire_job",
+      "docs": [
+        "Expire a stale Processing job back to Pending.",
+        "Anyone can call this after the queue's job_timeout_secs has elapsed.",
+        "This prevents jobs from being permanently stuck when a worker crashes."
+      ],
+      "discriminator": [
+        127,
+        5,
+        119,
+        250,
+        214,
+        255,
+        102,
+        168
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "docs": [
+            "Anyone can call expire_job — no authority required.",
+            "This prevents jobs from being permanently stuck when a worker crashes."
+          ],
+          "signer": true
+        },
+        {
+          "name": "queue_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  101,
+                  117,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "queue_name"
+              }
+            ]
+          }
+        },
+        {
+          "name": "job",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  106,
+                  111,
+                  98
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "queue_name"
+              },
+              {
+                "kind": "arg",
+                "path": "seq"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "queue_name",
+          "type": "string"
+        },
+        {
+          "name": "seq",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "fail_job",
+      "docs": [
+        "Report a job as failed. If retry_count < max_retries, the job returns",
+        "to Pending for another worker to claim. Otherwise it is permanently Failed.",
+        "Only the assigned worker can call this."
+      ],
+      "discriminator": [
+        211,
+        222,
+        65,
+        39,
+        115,
+        107,
+        125,
+        43
+      ],
+      "accounts": [
+        {
+          "name": "worker",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "queue_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  101,
+                  117,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "queue_name"
+              }
+            ]
+          }
+        },
+        {
+          "name": "worker_registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  111,
+                  114,
+                  107,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "queue_name"
+              },
+              {
+                "kind": "account",
+                "path": "worker"
+              }
+            ]
+          }
+        },
+        {
+          "name": "job",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  106,
+                  111,
+                  98
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "queue_name"
+              },
+              {
+                "kind": "arg",
+                "path": "seq"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "queue_name",
+          "type": "string"
+        },
+        {
+          "name": "seq",
+          "type": "u64"
+        },
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "FailJobParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "initialize_queue",
+      "docs": [
+        "Create a new named job queue. Called once by the authority.",
+        "",
+        "# Arguments",
+        "* `params` - Queue name, max_retries, job_timeout_secs"
+      ],
+      "discriminator": [
+        174,
+        102,
+        132,
+        232,
+        90,
+        202,
+        27,
+        20
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "queue_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  101,
+                  117,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "queue_name"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "params",
+          "type": {
+            "defined": {
+              "name": "InitializeQueueParams"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "register_worker",
+      "docs": [
+        "Register a worker keypair to process jobs on a queue.",
+        "Only the queue authority can register workers."
+      ],
+      "discriminator": [
+        22,
+        253,
+        23,
+        225,
+        230,
+        31,
+        6,
+        192
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "docs": [
+            "Queue authority must authorize new workers."
+          ],
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "queue_config"
+          ]
+        },
+        {
+          "name": "queue_config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  101,
+                  117,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "queue_name"
+              }
+            ]
+          }
+        },
+        {
+          "name": "worker",
+          "docs": [
+            "The pubkey that will sign claim/complete/fail instructions."
+          ]
+        },
+        {
+          "name": "worker_registry",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  111,
+                  114,
+                  107,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "queue_name"
+              },
+              {
+                "kind": "account",
+                "path": "worker"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "queue_name",
+          "type": "string"
+        }
+      ]
+    },
+    {
+      "name": "set_queue_paused",
+      "docs": [
+        "Pause or resume a queue. Only the queue authority can call this.",
+        "When paused, enqueue_job will be rejected."
+      ],
+      "discriminator": [
+        75,
+        37,
+        8,
+        150,
+        81,
+        113,
+        10,
+        209
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true,
+          "relations": [
+            "queue_config"
+          ]
+        },
+        {
+          "name": "queue_config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  113,
+                  117,
+                  101,
+                  117,
+                  101
+                ]
+              },
+              {
+                "kind": "arg",
+                "path": "queue_name"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "queue_name",
+          "type": "string"
+        },
+        {
+          "name": "pause",
+          "type": "bool"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Job",
+      "discriminator": [
+        75,
+        124,
+        80,
+        203,
+        161,
+        180,
+        202,
+        80
+      ]
+    },
+    {
+      "name": "QueueConfig",
+      "discriminator": [
+        60,
+        225,
+        7,
+        92,
+        142,
+        69,
+        96,
+        68
+      ]
+    },
+    {
+      "name": "WorkerRegistry",
+      "discriminator": [
+        128,
+        105,
+        74,
+        221,
+        50,
+        223,
+        42,
+        195
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "JobClaimed",
+      "discriminator": [
+        176,
+        110,
+        104,
+        38,
+        27,
+        220,
+        61,
+        191
+      ]
+    },
+    {
+      "name": "JobCompleted",
+      "discriminator": [
+        176,
+        207,
+        246,
+        115,
+        95,
+        179,
+        9,
+        132
+      ]
+    },
+    {
+      "name": "JobEnqueued",
+      "discriminator": [
+        253,
+        145,
+        52,
+        57,
+        172,
+        39,
+        112,
+        100
+      ]
+    },
+    {
+      "name": "JobExpired",
+      "discriminator": [
+        213,
+        123,
+        115,
+        173,
+        157,
+        242,
+        12,
+        71
+      ]
+    },
+    {
+      "name": "JobFailed",
+      "discriminator": [
+        239,
+        142,
+        192,
+        215,
+        175,
+        72,
+        19,
+        44
+      ]
+    },
+    {
+      "name": "QueuePauseToggled",
+      "discriminator": [
+        91,
+        94,
+        47,
+        190,
+        236,
+        170,
+        239,
+        195
+      ]
+    },
+    {
+      "name": "WorkerDeactivated",
+      "discriminator": [
+        45,
+        58,
+        40,
+        36,
+        116,
+        95,
+        86,
+        63
+      ]
+    },
+    {
+      "name": "WorkerRegistered",
+      "discriminator": [
+        32,
+        196,
+        68,
+        85,
+        235,
+        201,
+        213,
+        179
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "QueuePaused",
+      "msg": "Queue is currently paused. No new jobs can be enqueued."
+    },
+    {
+      "code": 6001,
+      "name": "QueueNameTooLong",
+      "msg": "Queue name exceeds 32 characters."
+    },
+    {
+      "code": 6002,
+      "name": "JobTypeTooLong",
+      "msg": "Job type string exceeds 32 characters."
+    },
+    {
+      "code": 6003,
+      "name": "PayloadTooLarge",
+      "msg": "Payload exceeds the 512-byte maximum. Store large payloads off-chain and pass a content hash."
+    },
+    {
+      "code": 6004,
+      "name": "JobNotPending",
+      "msg": "Job is not in Pending status. It may have already been claimed by another worker."
+    },
+    {
+      "code": 6005,
+      "name": "JobNotProcessing",
+      "msg": "Job is not in Processing status. Cannot complete or fail a job that is not active."
+    },
+    {
+      "code": 6006,
+      "name": "WrongWorker",
+      "msg": "Only the assigned worker may complete or fail this job."
+    },
+    {
+      "code": 6007,
+      "name": "JobAlreadyFinished",
+      "msg": "Job has already been completed or permanently failed."
+    },
+    {
+      "code": 6008,
+      "name": "WorkerNotRegistered",
+      "msg": "Worker is not registered for this queue."
+    },
+    {
+      "code": 6009,
+      "name": "WorkerDeactivated",
+      "msg": "Worker has been deactivated by the queue authority."
+    },
+    {
+      "code": 6010,
+      "name": "WorkerAlreadyRegistered",
+      "msg": "Worker is already registered for this queue."
+    },
+    {
+      "code": 6011,
+      "name": "JobNotExpired",
+      "msg": "Job has not yet exceeded the timeout window. Cannot expire it yet."
+    },
+    {
+      "code": 6012,
+      "name": "CannotExpireNonProcessingJob",
+      "msg": "Job is not in Processing status. Only Processing jobs can be expired."
+    },
+    {
+      "code": 6013,
+      "name": "Unauthorized",
+      "msg": "Only the queue authority can perform this action."
+    },
+    {
+      "code": 6014,
+      "name": "InvalidQueue",
+      "msg": "The provided queue account does not match the job's queue field."
+    },
+    {
+      "code": 6015,
+      "name": "ResultTooLarge",
+      "msg": "Result data exceeds the 128-byte maximum."
+    }
+  ],
+  "types": [
+    {
+      "name": "CompleteJobParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "result",
+            "type": "bytes"
+          }
+        ]
+      }
+    },
+    {
+      "name": "EnqueueJobParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "queue_name",
+            "type": "string"
+          },
+          {
+            "name": "job_type",
+            "type": "string"
+          },
+          {
+            "name": "payload",
+            "type": "bytes"
+          },
+          {
+            "name": "priority",
+            "type": "u8"
+          },
+          {
+            "name": "max_retries_override",
+            "docs": [
+              "Override queue default; pass 0 to use queue default."
+            ],
+            "type": {
+              "option": "u8"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "FailJobParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "reason",
+            "type": "string"
+          }
+        ]
+      }
+    },
+    {
+      "name": "InitializeQueueParams",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "queue_name",
+            "type": "string"
+          },
+          {
+            "name": "max_retries",
+            "type": "u8"
+          },
+          {
+            "name": "job_timeout_secs",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Job",
+      "docs": [
+        "A single unit of work. One PDA per job.",
+        "PDA seeds: [b\"job\", queue_name, seq.to_le_bytes()]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "queue",
+            "docs": [
+              "Parent queue."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "seq",
+            "docs": [
+              "Monotonic sequence number — determines FIFO order."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "job_type",
+            "docs": [
+              "Job type discriminator for worker routing (e.g. b\"send_email\\0...\")."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "payload",
+            "docs": [
+              "Arbitrary payload bytes. Large data should be stored off-chain (Arweave/IPFS)",
+              "with only a 32-byte content hash stored here."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                512
+              ]
+            }
+          },
+          {
+            "name": "status",
+            "docs": [
+              "Current state machine status."
+            ],
+            "type": {
+              "defined": {
+                "name": "JobStatus"
+              }
+            }
+          },
+          {
+            "name": "priority",
+            "docs": [
+              "Priority: 0-255. Higher value = processed first among Pending jobs."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "retry_count",
+            "docs": [
+              "How many times this job has been retried."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "max_retries",
+            "docs": [
+              "Maximum retries before permanently failing."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "assigned_worker",
+            "docs": [
+              "Worker currently processing this job. None when Pending/Completed/Failed."
+            ],
+            "type": {
+              "option": "pubkey"
+            }
+          },
+          {
+            "name": "creator",
+            "docs": [
+              "Who enqueued this job — rent reclaim target."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "enqueued_at",
+            "type": "i64"
+          },
+          {
+            "name": "started_at",
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "completed_at",
+            "type": {
+              "option": "i64"
+            }
+          },
+          {
+            "name": "result",
+            "docs": [
+              "Result or error message (up to 128 bytes)."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                128
+              ]
+            }
+          },
+          {
+            "name": "result_len",
+            "type": "u8"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Canonical PDA bump."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "JobClaimed",
+      "docs": [
+        "Emitted when a worker claims a job."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "job",
+            "type": "pubkey"
+          },
+          {
+            "name": "seq",
+            "type": "u64"
+          },
+          {
+            "name": "worker",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "JobCompleted",
+      "docs": [
+        "Emitted when a job completes successfully."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "job",
+            "type": "pubkey"
+          },
+          {
+            "name": "seq",
+            "type": "u64"
+          },
+          {
+            "name": "worker",
+            "type": "pubkey"
+          },
+          {
+            "name": "duration_secs",
+            "type": "i64"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "JobEnqueued",
+      "docs": [
+        "Emitted when a new job is enqueued."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "queue",
+            "type": "pubkey"
+          },
+          {
+            "name": "job",
+            "type": "pubkey"
+          },
+          {
+            "name": "seq",
+            "type": "u64"
+          },
+          {
+            "name": "job_type",
+            "type": "string"
+          },
+          {
+            "name": "priority",
+            "type": "u8"
+          },
+          {
+            "name": "creator",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "JobExpired",
+      "docs": [
+        "Emitted when a stale Processing job is expired."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "job",
+            "type": "pubkey"
+          },
+          {
+            "name": "seq",
+            "type": "u64"
+          },
+          {
+            "name": "previous_worker",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "JobFailed",
+      "docs": [
+        "Emitted when a job fails (either retry or permanent failure)."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "job",
+            "type": "pubkey"
+          },
+          {
+            "name": "seq",
+            "type": "u64"
+          },
+          {
+            "name": "worker",
+            "type": "pubkey"
+          },
+          {
+            "name": "retry_count",
+            "type": "u8"
+          },
+          {
+            "name": "permanent",
+            "type": "bool"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "JobStatus",
+      "docs": [
+        "Status of a job — drives the on-chain state machine."
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Pending"
+          },
+          {
+            "name": "Processing"
+          },
+          {
+            "name": "Completed"
+          },
+          {
+            "name": "Failed"
+          }
+        ]
+      }
+    },
+    {
+      "name": "QueueConfig",
+      "docs": [
+        "Root authority account for a named job queue.",
+        "PDA seeds: [b\"queue\", queue_name]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "authority",
+            "docs": [
+              "The authority who can register/deactivate workers and pause the queue."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "queue_name",
+            "docs": [
+              "Human-readable queue name, null-padded to 32 bytes. Used as PDA seed."
+            ],
+            "type": {
+              "array": [
+                "u8",
+                32
+              ]
+            }
+          },
+          {
+            "name": "next_job_seq",
+            "docs": [
+              "Monotonically increasing sequence counter.",
+              "The next job enqueued will get this value, then it increments."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_enqueued",
+            "docs": [
+              "Lifetime counters for observability."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "total_completed",
+            "type": "u64"
+          },
+          {
+            "name": "total_failed",
+            "type": "u64"
+          },
+          {
+            "name": "is_paused",
+            "docs": [
+              "Circuit breaker — when true, enqueue_job is rejected."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "max_retries",
+            "docs": [
+              "Default max retries for jobs in this queue (workers may override per-job)."
+            ],
+            "type": "u8"
+          },
+          {
+            "name": "job_timeout_secs",
+            "docs": [
+              "Job processing timeout in seconds. After this, anyone can call expire_job."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Canonical PDA bump, stored for cheap CPI derivation."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "QueuePauseToggled",
+      "docs": [
+        "Emitted when a queue is paused or unpaused."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "queue",
+            "type": "pubkey"
+          },
+          {
+            "name": "is_paused",
+            "type": "bool"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "WorkerDeactivated",
+      "docs": [
+        "Emitted when a worker is deactivated by queue authority."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "queue",
+            "type": "pubkey"
+          },
+          {
+            "name": "worker",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "WorkerRegistered",
+      "docs": [
+        "Emitted when a worker is registered."
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "queue",
+            "type": "pubkey"
+          },
+          {
+            "name": "worker",
+            "type": "pubkey"
+          },
+          {
+            "name": "timestamp",
+            "type": "i64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "WorkerRegistry",
+      "docs": [
+        "Tracks a registered worker for a specific queue.",
+        "PDA seeds: [b\"worker\", queue_name, worker_pubkey]"
+      ],
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "queue",
+            "docs": [
+              "Queue this worker is registered to."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "worker",
+            "docs": [
+              "The worker's signing keypair pubkey."
+            ],
+            "type": "pubkey"
+          },
+          {
+            "name": "registered_at",
+            "docs": [
+              "Timestamp of registration."
+            ],
+            "type": "i64"
+          },
+          {
+            "name": "jobs_completed",
+            "docs": [
+              "Reputation metrics — used for the worker leaderboard."
+            ],
+            "type": "u64"
+          },
+          {
+            "name": "jobs_failed",
+            "type": "u64"
+          },
+          {
+            "name": "jobs_claimed",
+            "type": "u64"
+          },
+          {
+            "name": "is_active",
+            "docs": [
+              "Queue authority can set this to false to deactivate a rogue worker."
+            ],
+            "type": "bool"
+          },
+          {
+            "name": "bump",
+            "docs": [
+              "Canonical PDA bump."
+            ],
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ]
+}

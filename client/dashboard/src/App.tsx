@@ -5,13 +5,6 @@ import {
   Send, Users, TrendingUp, AlertCircle, PauseCircle, PlayCircle
 } from "lucide-react";
 
-// @ts-ignore - IDL type from @coral-xyz/anchor doesn't match exact JSON structure
-import IDLJson from "../../../target/idl/solqueue.json";
-const IDL = IDLJson as any;
-
-console.log("IDL loaded:", IDL);
-console.log("IDL instructions:", IDL?.instructions?.length);
-
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const PROGRAM_ID = new PublicKey("EuzHoVFafwymNComWL1K1ehEt4V6d1CpGx5mUqsQP8r4");
