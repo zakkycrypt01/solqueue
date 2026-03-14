@@ -1,17 +1,16 @@
 import { useState, useEffect, useCallback } from "react";
-import { useWallet } from "@solana/wallet-adapter-react";
-import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
-import * as anchor from "@coral-xyz/anchor";
-import { Connection, PublicKey, SystemProgram, clusterApiUrl, Transaction, Keypair } from "@solana/web3.js";
-import { BN } from "@coral-xyz/anchor";
+import { Connection, PublicKey, clusterApiUrl } from "@solana/web3.js";
 import {
   Activity, Zap, CheckCircle, XCircle, Clock, RefreshCw,
-  Send, Users, BarChart3, AlertCircle, PauseCircle, PlayCircle
+  Send, Users, TrendingUp, AlertCircle, PauseCircle, PlayCircle
 } from "lucide-react";
 
 // @ts-ignore - IDL type from @coral-xyz/anchor doesn't match exact JSON structure
 import IDLJson from "../../../target/idl/solqueue.json";
 const IDL = IDLJson as any;
+
+console.log("IDL loaded:", IDL);
+console.log("IDL instructions:", IDL?.instructions?.length);
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -117,22 +116,11 @@ function StatCard({ label, value, icon: Icon, color }: {
 }
 
 function JobRow({ 
-  job, 
-  wallet,
-  onClaim,
-  onComplete,
-  onFail,
+  job,
 }: { 
   job: JobItem;
-  wallet: any;
-  onClaim: (seq: number) => Promise<void>;
-  onComplete: (seq: number) => Promise<void>;
-  onFail: (seq: number) => Promise<void>;
 }) {
   const { label, color, icon: StatusIcon } = statusConfig(job.status);
-  const canClaim = job.status === "pending" && wallet.connected;
-  const canComplete = job.status === "processing" && wallet.connected && job.assignedWorker === wallet.publicKey?.toBase58();
-  const canFail = job.status === "processing" && wallet.connected && job.assignedWorker === wallet.publicKey?.toBase58();
 
   return (
     <tr className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
@@ -157,40 +145,10 @@ function JobRow({
       <td className="py-3 px-4 text-xs text-gray-500">
         {new Date(job.enqueuedAt * 1000).toLocaleTimeString()}
       </td>
-      <td className="py-3 px-4 flex items-center gap-2">
-        <a href={explorerAddr(job.pubkey)} target="_blank" rel="noopener noreferrer"
-           className="text-purple-600 hover:underline font-mono text-xs">
+      <td className="py-3 px-4 font-mono text-xs text-purple-600 hover:underline">
+        <a href={explorerAddr(job.pubkey)} target="_blank" rel="noopener noreferrer">
           {job.pubkey.slice(0, 8)}…
         </a>
-        <div className="flex gap-1">
-          {canClaim && (
-            <button
-              onClick={() => onClaim(job.seq)}
-              className="px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
-              title="Claim this job for processing"
-            >
-              Claim
-            </button>
-          )}
-          {canComplete && (
-            <button
-              onClick={() => onComplete(job.seq)}
-              className="px-2 py-1 text-xs bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors"
-              title="Mark as completed"
-            >
-              Complete
-            </button>
-          )}
-          {canFail && (
-            <button
-              onClick={() => onFail(job.seq)}
-              className="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
-              title="Mark as failed (will retry)"
-            >
-              Fail
-            </button>
-          )}
-        </div>
       </td>
     </tr>
   );
@@ -199,7 +157,6 @@ function JobRow({
 // ─── Main App ─────────────────────────────────────────────────────────────────
 
 export default function App() {
-  const wallet = useWallet();
   const [queueName, setQueueName]   = useState("my-queue");
   const [inputQueue, setInputQueue] = useState("my-queue");
   const [stats, setStats]           = useState<QueueStats | null>(null);
@@ -207,12 +164,6 @@ export default function App() {
   const [loading, setLoading]       = useState(false);
   const [error, setError]           = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-
-  // Enqueue form state
-  const [jobType, setJobType]   = useState("send_email");
-  const [payload, setPayload]   = useState('{"to":"user@example.com"}');
-  const [priority, setPriority] = useState("0");
-  const [statusMsg, setStatusMsg] = useState<string | null>(null);
 
   // ── Fetch queue data ─────────────────────────────────────────────────────
 
@@ -394,271 +345,6 @@ export default function App() {
     }
   }, [stats, queueName]);
 
-  // ── Enqueue Job Handler ──────────────────────────────────────────────────
-
-  const handleEnqueueJob = useCallback(async () => {
-    if (!wallet.publicKey) {
-      setStatusMsg("❌ Please connect your Solana wallet first");
-      return;
-    }
-
-    if (!stats) {
-      setStatusMsg("❌ Queue stats not loaded");
-      return;
-    }
-
-    try {
-      setStatusMsg("⏳ Preparing transaction...");
-
-      // Parse payload as JSON
-      let payloadBytes: Buffer;
-      try {
-        const payloadObj = JSON.parse(payload);
-        payloadBytes = Buffer.from(JSON.stringify(payloadObj));
-      } catch (e) {
-        setStatusMsg("❌ Invalid JSON payload");
-        return;
-      }
-
-      if (payloadBytes.length > 512) {
-        setStatusMsg("❌ Payload exceeds 512 bytes");
-        return;
-      }
-
-      // Create program instance with wallet provider
-      // @ts-ignore - wallet adapter types not fully compatible with AnchorProvider
-      const provider = new anchor.AnchorProvider(CONNECTION, wallet as any, { commitment: "confirmed" });
-      // @ts-ignore - IDL type mismatch with AnchorProvider
-      const program = new anchor.Program(IDL, PROGRAM_ID, provider);
-
-      const queuePDA = deriveQueuePDA(queueName);
-      const seq = stats.nextJobSeq;
-      const jobPDA = deriveJobPDA(queueName, seq);
-
-      // Build the enqueue_job transaction
-      // @ts-ignore - complex recursion in type inference  
-      const tx = await program.methods.enqueueJob(queueName, new BN(seq), {
-        queueName,
-        jobType,
-        payload: payloadBytes,
-        priority: parseInt(priority) || 0,
-        maxRetriesOverride: null,
-      })
-        .accounts({
-          creator: wallet.publicKey,
-          queueConfig: queuePDA,
-          job: jobPDA,
-          systemProgram: SystemProgram.programId,
-        })
-        .transaction();
-
-      tx.feePayer = wallet.publicKey;
-      tx.recentBlockhash = (await CONNECTION.getLatestBlockhash()).blockhash;
-
-      if (!wallet.signTransaction) {
-        setStatusMsg("❌ Wallet does not support signing transactions");
-        return;
-      }
-
-      setStatusMsg("⏳ Signing transaction...");
-      const signedTx = await wallet.signTransaction(tx);
-
-      setStatusMsg("⏳ Sending transaction...");
-      const sig = await CONNECTION.sendRawTransaction(signedTx.serialize());
-
-      setStatusMsg(`⏳ Confirming... ${sig.slice(0, 8)}...`);
-      await CONNECTION.confirmTransaction(sig);
-
-      setStatusMsg(`✅ Job enqueued! TX: ${sig.slice(0, 8)}...`);
-      
-      // Reset form
-      setPayload('{"to":"user@example.com"}');
-      setJobType("send_email");
-      setPriority("0");
-
-      // Refresh queue stats and jobs
-      setTimeout(() => {
-        fetchQueue();
-        fetchJobs();
-      }, 2000);
-    } catch (e: any) {
-      console.error("Enqueue error:", e);
-      setStatusMsg(`❌ ${e.message || "Failed to enqueue job"}`);
-    }
-  }, [wallet, stats, queueName, jobType, payload, priority, fetchQueue, fetchJobs]);
-
-  // ── Claim Job Handler ────────────────────────────────────────────────────
-
-  const handleClaimJob = useCallback(async (seq: number) => {
-    if (!wallet.publicKey) {
-      setStatusMsg("❌ Please connect your Solana wallet first");
-      return;
-    }
-
-    try {
-      setStatusMsg(`⏳ Claiming job ${seq}...`);
-
-      // @ts-ignore - wallet adapter types not fully compatible with AnchorProvider
-      const provider = new anchor.AnchorProvider(CONNECTION, wallet as any, { commitment: "confirmed" });
-      // @ts-ignore - IDL type mismatch with AnchorProvider
-      const program = new anchor.Program(IDL, PROGRAM_ID, provider);
-
-      const queuePDA = deriveQueuePDA(queueName);
-      const jobPDA = deriveJobPDA(queueName, seq);
-      const [workerPDA] = PublicKey.findProgramAddressSync(
-        [Buffer.from("worker"), Buffer.from(queueName), wallet.publicKey.toBuffer()],
-        PROGRAM_ID
-      );
-
-      const tx = await program.methods.claimJob(queueName, new BN(seq))
-        .accounts({
-          worker: wallet.publicKey,
-          queueConfig: queuePDA,
-          workerRegistry: workerPDA,
-          job: jobPDA,
-        })
-        .transaction();
-
-      tx.feePayer = wallet.publicKey;
-      tx.recentBlockhash = (await CONNECTION.getLatestBlockhash()).blockhash;
-
-      if (!wallet.signTransaction) {
-        setStatusMsg("❌ Wallet does not support signing transactions");
-        return;
-      }
-
-      setStatusMsg("⏳ Signing claim transaction...");
-      const signedTx = await wallet.signTransaction(tx);
-
-      setStatusMsg("⏳ Sending transaction...");
-      const sig = await CONNECTION.sendRawTransaction(signedTx.serialize());
-
-      await CONNECTION.confirmTransaction(sig);
-      setStatusMsg(`✅ Job claimed! TX: ${sig.slice(0, 8)}...`);
-
-      setTimeout(() => fetchJobs(), 2000);
-    } catch (e: any) {
-      console.error("Claim error:", e);
-      setStatusMsg(`❌ ${e.message || "Failed to claim job"}`);
-    }
-  }, [wallet, queueName, fetchJobs]);
-
-  // ── Complete Job Handler ─────────────────────────────────────────────────
-
-  const handleCompleteJob = useCallback(async (seq: number) => {
-    if (!wallet.publicKey) {
-      setStatusMsg("❌ Please connect your Solana wallet first");
-      return;
-    }
-
-    try {
-      setStatusMsg(`⏳ Completing job ${seq}...`);
-
-      // @ts-ignore - wallet adapter types not fully compatible with AnchorProvider
-      const provider = new anchor.AnchorProvider(CONNECTION, wallet as any, { commitment: "confirmed" });
-      // @ts-ignore - IDL type mismatch with AnchorProvider
-      const program = new anchor.Program(IDL, PROGRAM_ID, provider);
-
-      const queuePDA = deriveQueuePDA(queueName);
-      const jobPDA = deriveJobPDA(queueName, seq);
-      const [workerPDA] = PublicKey.findProgramAddressSync(
-        [Buffer.from("worker"), Buffer.from(queueName), wallet.publicKey.toBuffer()],
-        PROGRAM_ID
-      );
-
-      const tx = await program.methods.completeJob(queueName, new BN(seq), {
-        result: Buffer.from("Completed via dashboard"),
-      })
-        .accounts({
-          worker: wallet.publicKey,
-          queueConfig: queuePDA,
-          workerRegistry: workerPDA,
-          job: jobPDA,
-        })
-        .transaction();
-
-      tx.feePayer = wallet.publicKey;
-      tx.recentBlockhash = (await CONNECTION.getLatestBlockhash()).blockhash;
-
-      if (!wallet.signTransaction) {
-        setStatusMsg("❌ Wallet does not support signing transactions");
-        return;
-      }
-
-      setStatusMsg("⏳ Signing complete transaction...");
-      const signedTx = await wallet.signTransaction(tx);
-
-      setStatusMsg("⏳ Sending transaction...");
-      const sig = await CONNECTION.sendRawTransaction(signedTx.serialize());
-
-      await CONNECTION.confirmTransaction(sig);
-      setStatusMsg(`✅ Job completed! TX: ${sig.slice(0, 8)}...`);
-
-      setTimeout(() => fetchJobs(), 2000);
-    } catch (e: any) {
-      console.error("Complete error:", e);
-      setStatusMsg(`❌ ${e.message || "Failed to complete job"}`);
-    }
-  }, [wallet, queueName, fetchJobs]);
-
-  // ── Fail Job Handler ─────────────────────────────────────────────────────
-
-  const handleFailJob = useCallback(async (seq: number) => {
-    if (!wallet.publicKey) {
-      setStatusMsg("❌ Please connect your Solana wallet first");
-      return;
-    }
-
-    try {
-      setStatusMsg(`⏳ Failing job ${seq}...`);
-
-      // @ts-ignore - wallet adapter types not fully compatible with AnchorProvider
-      const provider = new anchor.AnchorProvider(CONNECTION, wallet as any, { commitment: "confirmed" });
-      // @ts-ignore - IDL type mismatch with AnchorProvider
-      const program = new anchor.Program(IDL, PROGRAM_ID, provider);
-
-      const queuePDA = deriveQueuePDA(queueName);
-      const jobPDA = deriveJobPDA(queueName, seq);
-      const [workerPDA] = PublicKey.findProgramAddressSync(
-        [Buffer.from("worker"), Buffer.from(queueName), wallet.publicKey.toBuffer()],
-        PROGRAM_ID
-      );
-
-      const tx = await program.methods.failJob(queueName, new BN(seq), {
-        reason: Buffer.from("Failed via dashboard"),
-      })
-        .accounts({
-          worker: wallet.publicKey,
-          queueConfig: queuePDA,
-          workerRegistry: workerPDA,
-          job: jobPDA,
-        })
-        .transaction();
-
-      tx.feePayer = wallet.publicKey;
-      tx.recentBlockhash = (await CONNECTION.getLatestBlockhash()).blockhash;
-
-      if (!wallet.signTransaction) {
-        setStatusMsg("❌ Wallet does not support signing transactions");
-        return;
-      }
-
-      setStatusMsg("⏳ Signing fail transaction...");
-      const signedTx = await wallet.signTransaction(tx);
-
-      setStatusMsg("⏳ Sending transaction...");
-      const sig = await CONNECTION.sendRawTransaction(signedTx.serialize());
-
-      await CONNECTION.confirmTransaction(sig);
-      setStatusMsg(`✅ Job failed (marked for retry or dead-letter). TX: ${sig.slice(0, 8)}...`);
-
-      setTimeout(() => fetchJobs(), 2000);
-    } catch (e: any) {
-      console.error("Fail error:", e);
-      setStatusMsg(`❌ ${e.message || "Failed to mark job as failed"}`);
-    }
-  }, [wallet, queueName, fetchJobs]);
-
   useEffect(() => {
     fetchQueue();
     setTimeout(fetchJobs, 500);
@@ -704,7 +390,6 @@ export default function App() {
               <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
               Refresh
             </button>
-            <WalletMultiButton className="!bg-purple-600 !text-white hover:!bg-purple-700" />
           </div>
         </div>
       </header>
@@ -752,64 +437,8 @@ export default function App() {
                 <StatCard label="Total Enqueued" value={stats.totalEnqueued} icon={Send} color="bg-purple-500" />
                 <StatCard label="Completed"      value={stats.totalCompleted} icon={CheckCircle} color="bg-green-500" />
                 <StatCard label="Failed"         value={stats.totalFailed} icon={XCircle} color="bg-red-500" />
-                <StatCard label="Next Seq"       value={stats.nextJobSeq} icon={BarChart3} color="bg-blue-500" />
+                <StatCard label="Next Seq"       value={stats.nextJobSeq} icon={TrendingUp} color="bg-blue-500" />
               </div>
-            </div>
-
-            {/* Enqueue Form */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6">
-              <h2 className="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                <Send size={18} className="text-purple-600" />
-                Enqueue Job
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1.5">Job Type</label>
-                  <input
-                    value={jobType}
-                    onChange={e => setJobType(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
-                    placeholder="e.g. send_email"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1.5">Payload (JSON)</label>
-                  <input
-                    value={payload}
-                    onChange={e => setPayload(e.target.value)}
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-purple-500 outline-none"
-                    placeholder='{"key":"value"}'
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1.5">Priority (0–255)</label>
-                  <input
-                    value={priority}
-                    onChange={e => setPriority(e.target.value)}
-                    type="number"
-                    min="0" max="255"
-                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-500 outline-none"
-                  />
-                </div>
-              </div>
-              <div className="mt-4 flex items-center justify-between">
-                <p className="text-xs text-gray-500">
-                  {wallet.connected ? "✅ Wallet connected" : "❌ Connect a Solana wallet (Phantom/Backpack) to sign transactions"}
-                </p>
-                <button
-                  disabled={!wallet.connected}
-                  className="px-5 py-2.5 rounded-lg bg-purple-600 text-white text-sm font-medium hover:bg-purple-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-2"
-                  onClick={handleEnqueueJob}
-                >
-                  <Send size={14} />
-                  Enqueue Job
-                </button>
-              </div>
-              {statusMsg && (
-                <div className="mt-3 text-xs text-purple-700 bg-purple-50 rounded-lg px-4 py-3">
-                  {statusMsg}
-                </div>
-              )}
             </div>
 
             {/* Jobs Table */}
@@ -849,10 +478,6 @@ export default function App() {
                         <JobRow 
                           key={job.pubkey} 
                           job={job}
-                          wallet={wallet}
-                          onClaim={handleClaimJob}
-                          onComplete={handleCompleteJob}
-                          onFail={handleFailJob}
                         />
                       ))}
                     </tbody>
